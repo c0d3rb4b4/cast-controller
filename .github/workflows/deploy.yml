@@ -15,6 +15,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Ensure remote deployment directory exists
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@192.168.68.84 "mkdir -p ~/cast-controller"
+
       - name: Sync files to service server
         run: |
           rsync -avz --delete \
@@ -107,4 +111,3 @@ jobs:
       - name: External health check
         run: |
           curl -sf http://192.168.68.84:8091/health
-

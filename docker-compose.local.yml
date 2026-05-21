@@ -1,0 +1,9 @@
+# Optional local override for Docker Desktop development.
+# Production uses docker-compose.yml with network_mode: host for Google Cast LAN
+# discovery/control on the Linux service server.
+services:
+  app:
+    network_mode: bridge
+    ports:
+      - "8091:8091"
+

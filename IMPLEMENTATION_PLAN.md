@@ -22,14 +22,21 @@ Verification notes:
 
 - [x] `python -m pytest` passes locally.
 - [x] `docker-compose config -q` passes locally.
+- [x] `docker-compose -f docker-compose.yml -f docker-compose.local.yml config -q`
+      passes locally.
 - [x] `python -m compileall -q src` passes locally.
-- [ ] `docker-compose build` was attempted locally, but Docker Desktop's Linux
-      engine was not running or available.
+- [x] `docker-compose build` passes locally with Docker Desktop running.
+- [x] `docker-compose -f docker-compose.yml -f docker-compose.local.yml up -d`
+      starts a healthy local container reachable at `http://localhost:8091`.
+- [x] Local `GET /health` and `GET /status` return HTTP 200 through Docker
+      Desktop using `docker-compose.local.yml`.
 - [ ] Real Cast device `/start` and `/stop` verification on the LAN is still
       pending.
 - [ ] Home Assistant `rest_command` calls are documented but have not been
       executed from Home Assistant yet.
-- [ ] GitHub Actions deployment has not been run from `main` yet.
+- [ ] A downloaded `deployment.log` showed an `rsync` exit code 11 during a
+      GitHub Actions deployment attempt; the workflow now creates
+      `~/cast-controller` before syncing, but deployment has not been rerun.
 
 ## Target Behavior
 
@@ -65,6 +72,7 @@ Create the application structure:
 ```text
 cast-controller/
   .github/workflows/deploy.yml
+  .dockerignore
   config/app.env.example
   src/
     app.py
@@ -74,6 +82,7 @@ cast-controller/
     reconcile.py
     state_store.py
   tests/
+  docker-compose.local.yml
   docker-compose.yml
   Dockerfile
   requirements.txt
@@ -194,7 +203,7 @@ Deliverable:
 - Playback is restored automatically after accidental pauses, Cast disconnects,
   or service restarts.
 
-## Phase 5: Containerization - Complete, Docker Build Pending
+## Phase 5: Containerization - Complete
 
 Add Docker assets similar to `noise-stream`.
 
@@ -221,6 +230,8 @@ Tasks:
     - `logging=promtail`
     - `service=cast-controller`
     - `environment=production`
+- Create optional `docker-compose.local.yml` for Docker Desktop verification
+  with bridge networking and `8091:8091` port publishing.
 
 Deliverable:
 
@@ -259,6 +270,14 @@ curl -X POST http://localhost:8091/stop \
   -d '{"device":"Bedroom Nest Mini"}'
 ```
 
+On Docker Desktop, use the local override to publish the port to the host:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.local.yml up -d
+curl http://localhost:8091/health
+curl http://localhost:8091/status
+```
+
 Deliverable:
 
 - Automated tests cover controller logic without requiring a Cast device, and a
@@ -274,6 +293,7 @@ Pipeline behavior:
 - Trigger on push to `main`.
 - Run on the self-hosted GitHub Actions runner.
 - Checkout the repository.
+- Ensure `~/cast-controller` exists on the service server.
 - Sync files to the service server:
 
 ```bash
