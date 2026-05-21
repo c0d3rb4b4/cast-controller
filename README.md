@@ -40,6 +40,12 @@ A background reconcile loop ensures observed state moves toward desired state.
 
 ## Endpoints
 
+### `GET /control`
+Serve a mobile-friendly control page with buttons for white, pink, and brown noise.
+The page calls `/start` with the selected `noise_type`, and calls `/stop` when the active button is tapped again.
+
+---
+
 ### `POST /start`
 Start or ensure playback on a Cast device.
 

@@ -57,6 +57,21 @@ def test_health_and_initial_status(tmp_path) -> None:
     assert status.json()["observed"] == "unknown"
 
 
+def test_control_page_is_served(tmp_path) -> None:
+    client = make_client(tmp_path)
+
+    response = client.get("/control")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert 'data-theme="dark"' in response.text
+    assert "WHITE" in response.text
+    assert "PINK" in response.text
+    assert "BROWN" in response.text
+    assert 'postJson("/start", { noise_type: noise })' in response.text
+    assert 'postJson("/stop", {})' in response.text
+
+
 def test_start_is_idempotent_and_uses_defaults(tmp_path) -> None:
     client = make_client(tmp_path)
 
