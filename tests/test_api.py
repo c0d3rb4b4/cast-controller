@@ -86,8 +86,10 @@ def test_control_page_is_served(tmp_path) -> None:
     assert 'min="0" max="100" step="1" value="10"' in response.text
     assert "10%" in response.text
     assert "volume: selectedVolume()" in response.text
-    assert 'fetch("/volume"' in response.text
+    assert 'fetch("/volume"' not in response.text
     assert 'postJson("/volume", { volume: selectedVolume() })' in response.text
+    assert "volumePercentFromStatus(state)" in response.text
+    assert "let volumeEditing = false" in response.text
     assert "const volumeStep = 3" in response.text
     assert 'state.observed !== "playing"' in response.text
     assert "window.setInterval(refreshStatus, 10000)" in response.text

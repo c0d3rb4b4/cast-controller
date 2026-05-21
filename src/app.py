@@ -271,9 +271,11 @@ CONTROL_PAGE_HTML = """<!doctype html>
     const volumeDown = document.getElementById("volumeDown");
     const volumeUp = document.getElementById("volumeUp");
     const buttons = [...document.querySelectorAll(".noise-button")];
+    const defaultVolumePercent = 10;
     const volumeStep = 3;
     let activeNoise = null;
     let pending = false;
+    let volumeEditing = false;
 
     const savedTheme = localStorage.getItem("cast-control-theme");
     root.dataset.theme = savedTheme === "light" ? "light" : "dark";
@@ -308,6 +310,19 @@ CONTROL_PAGE_HTML = """<!doctype html>
 
     function selectedVolume() {
       return Number((Number(volumeSlider.value) / 100).toFixed(2));
+    }
+
+    function volumePercentFromStatus(state) {
+      if (!state || state.volume === null || state.volume === undefined) {
+        return defaultVolumePercent;
+      }
+
+      const volume = Number(state.volume);
+      if (!Number.isFinite(volume)) {
+        return defaultVolumePercent;
+      }
+
+      return Math.round(volume * 100);
     }
 
     function inferNoiseType(state) {
@@ -349,20 +364,9 @@ CONTROL_PAGE_HTML = """<!doctype html>
 
         const state = await response.json();
         setActive(inferNoiseType(state));
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    async function refreshVolume() {
-      try {
-        const response = await fetch("/volume", { cache: "no-store" });
-        if (!response.ok) {
-          return;
+        if (!volumeEditing) {
+          setVolumePercent(volumePercentFromStatus(state));
         }
-
-        const state = await response.json();
-        setVolumePercent(state.percent);
       } catch (error) {
         console.error(error);
       }
@@ -416,9 +420,22 @@ CONTROL_PAGE_HTML = """<!doctype html>
       localStorage.setItem("cast-control-theme", nextTheme);
     });
 
-    volumeSlider.addEventListener("input", updateVolumeLabel);
-    volumeSlider.addEventListener("change", () => {
-      commitVolume().catch((error) => console.error(error));
+    volumeSlider.addEventListener("input", () => {
+      volumeEditing = true;
+      updateVolumeLabel();
+    });
+    volumeSlider.addEventListener("change", async () => {
+      try {
+        await commitVolume();
+      } catch (error) {
+        console.error(error);
+      } finally {
+        volumeEditing = false;
+        refreshStatus();
+      }
+    });
+    volumeSlider.addEventListener("blur", () => {
+      volumeEditing = false;
     });
     volumeDown.addEventListener("click", () => stepVolume(-1));
     volumeUp.addEventListener("click", () => stepVolume(1));
@@ -429,7 +446,6 @@ CONTROL_PAGE_HTML = """<!doctype html>
     });
 
     updateVolumeLabel();
-    refreshVolume();
     refreshStatus();
     window.setInterval(refreshStatus, 10000);
   </script>
