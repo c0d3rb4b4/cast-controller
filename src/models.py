@@ -40,6 +40,11 @@ class StopRequest(BaseModel):
     device: str | None = None
 
 
+class VolumeRequest(BaseModel):
+    device: str | None = None
+    volume: float = Field(ge=0, le=1)
+
+
 class ControllerState(BaseModel):
     desired: DesiredState = DesiredState.OFF
     observed: ObservedState = ObservedState.UNKNOWN
@@ -61,6 +66,14 @@ class ActionResponse(BaseModel):
     ok: bool
     desired: DesiredState
     action: str
+
+
+class VolumeResponse(BaseModel):
+    ok: bool
+    volume: float
+    percent: int
+    action: str
+    applied: bool = False
 
 
 class HealthResponse(BaseModel):

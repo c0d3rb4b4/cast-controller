@@ -17,6 +17,8 @@ from models import (
     StartRequest,
     StopRequest,
     ObservedState,
+    VolumeRequest,
+    VolumeResponse,
     utc_now,
 )
 from reconcile import Reconciler
@@ -80,13 +82,20 @@ CONTROL_PAGE_HTML = """<!doctype html>
       gap: 14px;
     }
 
+    .volume-panel {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      gap: 7px;
+      min-width: 0;
+      max-width: 560px;
+    }
+
     .volume-control {
       display: flex;
       align-items: center;
-      flex: 1 1 auto;
       gap: 10px;
       min-width: 0;
-      max-width: 560px;
       color: var(--muted);
       font-size: 1rem;
       font-weight: 700;
@@ -105,6 +114,32 @@ CONTROL_PAGE_HTML = """<!doctype html>
       width: 4ch;
       text-align: right;
       color: var(--muted);
+    }
+
+    .volume-steps {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      width: min(180px, 100%);
+    }
+
+    .volume-step {
+      min-height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 1.25rem;
+      font-weight: 800;
+      line-height: 1;
+      appearance: none;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .volume-step:active {
+      background: var(--active);
+      color: var(--fg);
     }
 
     .theme-toggle {
@@ -139,7 +174,7 @@ CONTROL_PAGE_HTML = """<!doctype html>
       flex-direction: column;
       gap: 14px;
       min-height: 100dvh;
-      padding: max(74px, calc(env(safe-area-inset-top) + 68px))
+      padding: max(120px, calc(env(safe-area-inset-top) + 114px))
         max(14px, env(safe-area-inset-right))
         max(14px, env(safe-area-inset-bottom))
         max(14px, env(safe-area-inset-left));
@@ -209,10 +244,16 @@ CONTROL_PAGE_HTML = """<!doctype html>
 </head>
 <body>
   <div class="top-controls">
-    <label class="volume-control" for="volumeSlider">
-      <input class="volume-slider" id="volumeSlider" type="range" min="0" max="100" step="1" value="10">
-      <output class="volume-value" id="volumeValue" for="volumeSlider">10%</output>
-    </label>
+    <div class="volume-panel">
+      <label class="volume-control" for="volumeSlider">
+        <input class="volume-slider" id="volumeSlider" type="range" min="0" max="100" step="1" value="10">
+        <output class="volume-value" id="volumeValue" for="volumeSlider">10%</output>
+      </label>
+      <div class="volume-steps" aria-label="Volume steps">
+        <button class="volume-step" id="volumeDown" type="button" aria-label="Decrease volume">-</button>
+        <button class="volume-step" id="volumeUp" type="button" aria-label="Increase volume">+</button>
+      </div>
+    </div>
     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light and dark mode">
       <span></span>
     </button>
@@ -227,7 +268,10 @@ CONTROL_PAGE_HTML = """<!doctype html>
     const themeToggle = document.getElementById("themeToggle");
     const volumeSlider = document.getElementById("volumeSlider");
     const volumeValue = document.getElementById("volumeValue");
+    const volumeDown = document.getElementById("volumeDown");
+    const volumeUp = document.getElementById("volumeUp");
     const buttons = [...document.querySelectorAll(".noise-button")];
+    const volumeStep = 3;
     let activeNoise = null;
     let pending = false;
 
@@ -255,6 +299,11 @@ CONTROL_PAGE_HTML = """<!doctype html>
 
     function updateVolumeLabel() {
       volumeValue.textContent = `${volumeSlider.value}%`;
+    }
+
+    function setVolumePercent(percent) {
+      volumeSlider.value = String(Math.max(0, Math.min(100, percent)));
+      updateVolumeLabel();
     }
 
     function selectedVolume() {
@@ -305,6 +354,37 @@ CONTROL_PAGE_HTML = """<!doctype html>
       }
     }
 
+    async function refreshVolume() {
+      try {
+        const response = await fetch("/volume", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const state = await response.json();
+        setVolumePercent(state.percent);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    async function commitVolume() {
+      const result = await postJson("/volume", { volume: selectedVolume() });
+      if (!result.ok) {
+        throw new Error(result.action);
+      }
+      setVolumePercent(result.percent);
+    }
+
+    async function stepVolume(direction) {
+      setVolumePercent(Number(volumeSlider.value) + direction * volumeStep);
+      try {
+        await commitVolume();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
     async function handleNoiseTap(button) {
       if (pending) {
         return;
@@ -337,6 +417,11 @@ CONTROL_PAGE_HTML = """<!doctype html>
     });
 
     volumeSlider.addEventListener("input", updateVolumeLabel);
+    volumeSlider.addEventListener("change", () => {
+      commitVolume().catch((error) => console.error(error));
+    });
+    volumeDown.addEventListener("click", () => stepVolume(-1));
+    volumeUp.addEventListener("click", () => stepVolume(1));
 
     buttons.forEach((button) => {
       button.setAttribute("aria-pressed", "false");
@@ -344,6 +429,7 @@ CONTROL_PAGE_HTML = """<!doctype html>
     });
 
     updateVolumeLabel();
+    refreshVolume();
     refreshStatus();
     window.setInterval(refreshStatus, 10000);
   </script>
@@ -398,6 +484,24 @@ def create_app(
         state.device_uuid = device_info.uuid or state.device_uuid
         state.device_model_name = device_info.model_name or state.device_model_name
 
+    def volume_percent(volume: float) -> int:
+        return int(round(volume * 100))
+
+    def volume_response(
+        *,
+        ok: bool,
+        volume: float,
+        action: str,
+        applied: bool = False,
+    ) -> VolumeResponse:
+        return VolumeResponse(
+            ok=ok,
+            volume=volume,
+            percent=volume_percent(volume),
+            action=action,
+            applied=applied,
+        )
+
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         state = state_store.load()
@@ -416,6 +520,56 @@ def create_app(
     @app.get("/control", response_class=HTMLResponse)
     async def control() -> HTMLResponse:
         return HTMLResponse(CONTROL_PAGE_HTML)
+
+    @app.get("/volume", response_model=VolumeResponse)
+    async def get_volume() -> VolumeResponse:
+        state = state_store.load()
+        volume = state.volume if state.volume is not None else settings.default_volume
+        return volume_response(
+            ok=True,
+            volume=volume,
+            action="volume_status",
+        )
+
+    @app.post("/volume", response_model=VolumeResponse)
+    async def set_volume(
+        request: VolumeRequest,
+    ) -> VolumeResponse:
+        state = state_store.load()
+        state.volume = request.volume
+        state.device = request.device or settings.default_device_name or state.device
+        state.device_host = state.device_host or settings.default_device_host
+        state.last_action = "volume_saved"
+        state_store.save(state)
+
+        should_apply = state.desired == DesiredState.ON or state.observed in {
+            ObservedState.PLAYING,
+            ObservedState.PAUSED,
+        }
+        if not should_apply:
+            return volume_response(
+                ok=True,
+                volume=state.volume,
+                action=state.last_action,
+            )
+
+        result = await cast_client.set_volume(
+            device=state.device,
+            device_host=state.device_host or settings.default_device_host,
+            volume=state.volume,
+        )
+        apply_device_info(state, result.device)
+        state.last_action = result.action
+        if result.ok:
+            state.last_success_at = utc_now()
+        state_store.save(state)
+
+        return volume_response(
+            ok=result.ok,
+            volume=state.volume,
+            action=state.last_action,
+            applied=result.ok,
+        )
 
     @app.post("/start", response_model=ActionResponse)
     async def start(

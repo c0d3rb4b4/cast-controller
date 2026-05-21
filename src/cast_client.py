@@ -60,6 +60,20 @@ class CastClient:
             device_host=device_host,
         )
 
+    async def set_volume(
+        self,
+        *,
+        device: str | None,
+        device_host: str | None,
+        volume: float,
+    ) -> CastResult:
+        return await asyncio.to_thread(
+            self._set_volume_sync,
+            device=device,
+            device_host=device_host,
+            volume=volume,
+        )
+
     def _cast_stream_sync(
         self,
         *,
@@ -165,6 +179,51 @@ class CastClient:
             return CastResult(
                 ok=False,
                 action="stop_failed",
+                observed=ObservedState.UNKNOWN,
+                message=str(exc),
+            )
+        finally:
+            self._stop_browser(browser)
+            self._disconnect_cast(cast)
+
+    def _set_volume_sync(
+        self,
+        *,
+        device: str | None,
+        device_host: str | None,
+        volume: float,
+    ) -> CastResult:
+        cast, browser = self._find_cast(device=device, device_host=device_host)
+        if cast is None:
+            return CastResult(
+                ok=False,
+                action="device_unavailable",
+                observed=ObservedState.UNKNOWN,
+                message="Cast device was not found",
+            )
+
+        try:
+            cast.wait(timeout=self.settings.cast_start_grace_s)
+            cast.set_volume(volume)
+            device_info = self._device_info_from_cast(cast)
+            self._cache_device(device_info)
+            logger.info(
+                "cast_volume_sent device=%s host=%s volume=%s",
+                device_info.name,
+                device_info.host,
+                volume,
+            )
+            return CastResult(
+                ok=True,
+                action="volume_set",
+                observed=ObservedState.UNKNOWN,
+                device=device_info,
+            )
+        except Exception as exc:
+            logger.exception("cast_volume_failed")
+            return CastResult(
+                ok=False,
+                action="volume_failed",
                 observed=ObservedState.UNKNOWN,
                 message=str(exc),
             )

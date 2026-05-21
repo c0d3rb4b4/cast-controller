@@ -42,7 +42,46 @@ A background reconcile loop ensures observed state moves toward desired state.
 
 ### `GET /control`
 Serve a mobile-friendly control page with buttons for white, pink, and brown noise.
-The page calls `/start` with the selected `noise_type` and volume slider value, and calls `/stop` when the active button is tapped again.
+The page calls `/start` with the selected `noise_type` and volume slider value, calls `/volume` when the volume control changes, and calls `/stop` when the active button is tapped again.
+
+---
+
+### `GET /volume`
+Return the current desired volume.
+
+**Response**
+```json
+{
+  "ok": true,
+  "volume": 0.1,
+  "percent": 10,
+  "action": "volume_status",
+  "applied": false
+}
+```
+
+---
+
+### `POST /volume`
+Set the desired volume. If playback is active, the controller also sends the volume change to the Cast device.
+
+**Request**
+```json
+{
+  "volume": 0.1
+}
+```
+
+**Response**
+```json
+{
+  "ok": true,
+  "volume": 0.1,
+  "percent": 10,
+  "action": "volume_set",
+  "applied": true
+}
+```
 
 ---
 
@@ -54,7 +93,7 @@ Start or ensure playback on a Cast device.
 {
   "device": "Bedroom Nest Mini",
   "stream_url": "http://192.168.68.84:8081/hls/noise_white/stream.m3u8",
-  "volume": 0.25
+  "volume": 0.1
 }
 ```
 
@@ -112,7 +151,7 @@ Return internal controller state.
   "observed": "playing",
   "device": "Bedroom Nest Mini",
   "stream_url": "http://192.168.68.84:8081/hls/noise_white/stream.m3u8",
-  "volume": 0.25,
+  "volume": 0.1,
   "last_action": "reconcile_cast"
 }
 ```
@@ -180,7 +219,7 @@ Environment variables:
 | `DEFAULT_STREAM_URL` | Stream URL | none |
 | `NOISE_STREAM_BASE_URL` | Base URL used to build default noise stream URLs | `http://192.168.68.84:8081` |
 | `DEFAULT_NOISE_TYPE` | Noise stream type when constructing default stream URL | `white` |
-| `DEFAULT_VOLUME` | Playback volume | `0.25` |
+| `DEFAULT_VOLUME` | Playback volume | `0.1` |
 | `RECONCILE_INTERVAL_S` | Reconcile interval | `30` |
 | `MIN_RECAST_INTERVAL_S` | Re-cast rate limit | `60` |
 | `CAST_START_GRACE_S` | Grace before recheck | `5` |
@@ -226,7 +265,7 @@ rest_command:
     url: "http://192.168.68.84:8091/start"
     method: POST
     content_type: "application/json"
-    payload: '{"device":"Bedroom Nest Mini","stream_url":"http://192.168.68.84:8081/hls/noise_white/stream.m3u8","volume":0.25}'
+    payload: '{"device":"Bedroom Nest Mini","stream_url":"http://192.168.68.84:8081/hls/noise_white/stream.m3u8","volume":0.1}'
 ```
 
 Zigbee button mapping:

@@ -47,7 +47,7 @@ jobs:
           NOISE_STREAM_BASE_URL=http://192.168.68.84:8081
           DEFAULT_NOISE_TYPE=white
           DEFAULT_STREAM_URL=http://192.168.68.84:8081/hls/noise_white/stream.m3u8
-          DEFAULT_VOLUME=0.25
+          DEFAULT_VOLUME=0.1
           RECONCILE_INTERVAL_S=30
           MIN_RECAST_INTERVAL_S=60
           CAST_START_GRACE_S=5

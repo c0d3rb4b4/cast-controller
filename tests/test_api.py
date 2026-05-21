@@ -9,13 +9,23 @@ from models import ControllerState, DesiredState, ObservedState, utc_now
 
 
 class FakeCastClient:
-    def __init__(self, stop_result: CastResult | None = None):
+    def __init__(
+        self,
+        stop_result: CastResult | None = None,
+        volume_result: CastResult | None = None,
+    ):
         self.stop_result = stop_result or CastResult(
             ok=True,
             action="reconcile_stop",
             observed=ObservedState.IDLE,
         )
+        self.volume_result = volume_result or CastResult(
+            ok=True,
+            action="volume_set",
+            observed=ObservedState.UNKNOWN,
+        )
         self.stop_calls = 0
+        self.volume_calls: list[dict] = []
 
     async def list_devices(self):
         return []
@@ -23,6 +33,10 @@ class FakeCastClient:
     async def stop(self, **kwargs):
         self.stop_calls += 1
         return self.stop_result
+
+    async def set_volume(self, **kwargs):
+        self.volume_calls.append(kwargs)
+        return self.volume_result
 
 
 def make_client(tmp_path, cast_client: FakeCastClient | None = None) -> TestClient:
@@ -72,9 +86,82 @@ def test_control_page_is_served(tmp_path) -> None:
     assert 'min="0" max="100" step="1" value="10"' in response.text
     assert "10%" in response.text
     assert "volume: selectedVolume()" in response.text
+    assert 'fetch("/volume"' in response.text
+    assert 'postJson("/volume", { volume: selectedVolume() })' in response.text
+    assert "const volumeStep = 3" in response.text
     assert 'state.observed !== "playing"' in response.text
     assert "window.setInterval(refreshStatus, 10000)" in response.text
     assert 'postJson("/stop", {})' in response.text
+
+
+def test_get_volume_uses_default_volume(tmp_path) -> None:
+    client = make_client(tmp_path)
+
+    response = client.get("/volume")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "volume": 0.1,
+        "percent": 10,
+        "action": "volume_status",
+        "applied": False,
+    }
+
+
+def test_post_volume_saves_volume_without_casting_when_off(tmp_path) -> None:
+    fake = FakeCastClient()
+    client = make_client(tmp_path, cast_client=fake)
+
+    response = client.post("/volume", json={"volume": 0.37})
+    status = client.get("/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "volume": 0.37,
+        "percent": 37,
+        "action": "volume_saved",
+        "applied": False,
+    }
+    assert status.json()["volume"] == 0.37
+    assert status.json()["last_action"] == "volume_saved"
+    assert fake.volume_calls == []
+
+
+def test_post_volume_updates_cast_when_playing(tmp_path) -> None:
+    fake = FakeCastClient()
+    client = make_client(tmp_path, cast_client=fake)
+    state_store = client.app.state.state_store
+    state_store.save(
+        ControllerState(
+            desired=DesiredState.ON,
+            observed=ObservedState.PLAYING,
+            device="Bedroom Nest Mini",
+            device_host="192.168.68.13",
+            stream_url="http://192.168.68.84:8081/hls/noise_white/stream.m3u8",
+            volume=0.1,
+        )
+    )
+
+    response = client.post("/volume", json={"volume": 0.42})
+    status = client.get("/status")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["volume"] == 0.42
+    assert response.json()["percent"] == 42
+    assert response.json()["action"] == "volume_set"
+    assert response.json()["applied"] is True
+    assert fake.volume_calls == [
+        {
+            "device": "Bedroom Nest Mini",
+            "device_host": "192.168.68.13",
+            "volume": 0.42,
+        }
+    ]
+    assert status.json()["volume"] == 0.42
+    assert status.json()["last_action"] == "volume_set"
 
 
 def test_start_is_idempotent_and_uses_defaults(tmp_path) -> None:
@@ -98,7 +185,7 @@ def test_start_is_idempotent_and_uses_defaults(tmp_path) -> None:
         status.json()["stream_url"]
         == "http://192.168.68.84:8081/hls/noise_white/stream.m3u8"
     )
-    assert status.json()["volume"] == 0.25
+    assert status.json()["volume"] == 0.1
     assert status.json()["last_action"] == "cast_requested"
     assert status.json()["failure_count"] == 0
     assert status.json()["last_cast_attempt_at"] is None

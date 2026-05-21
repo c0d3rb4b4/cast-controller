@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     default_device_name: str | None = None
     default_device_host: str | None = None
     default_stream_url: str | None = None
-    default_volume: float = Field(default=0.25, ge=0, le=1)
+    default_volume: float = Field(default=0.1, ge=0, le=1)
     reconcile_interval_s: float = Field(default=30, gt=0)
     min_recast_interval_s: float = Field(default=60, ge=0)
     cast_start_grace_s: float = Field(default=5, ge=0)
@@ -56,4 +56,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
