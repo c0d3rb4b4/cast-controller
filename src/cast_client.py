@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -92,11 +93,7 @@ class CastClient:
             cast.media_controller.block_until_active(
                 timeout=self.settings.cast_start_grace_s
             )
-            cast.media_controller.update_status()
-
-            observed = self._normalize_player_state(
-                getattr(cast.media_controller.status, "player_state", None)
-            )
+            observed = self._wait_for_player_state(cast.media_controller)
             device_info = self._device_info_from_cast(cast)
             self._cache_device(device_info)
             logger.info(
@@ -315,6 +312,20 @@ class CastClient:
                 return ObservedState.IDLE
             case _:
                 return ObservedState.UNKNOWN
+
+    def _wait_for_player_state(self, media_controller: Any) -> ObservedState:
+        deadline = time.monotonic() + self.settings.cast_start_grace_s
+        observed = ObservedState.UNKNOWN
+
+        while True:
+            media_controller.update_status()
+            observed = self._normalize_player_state(
+                getattr(media_controller.status, "player_state", None)
+            )
+            if observed == ObservedState.PLAYING or time.monotonic() >= deadline:
+                return observed
+
+            time.sleep(0.25)
 
     def _stop_browser(self, browser: Any | None) -> None:
         if browser is None:

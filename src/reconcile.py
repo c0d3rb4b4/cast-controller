@@ -129,9 +129,12 @@ class Reconciler:
         state.observed = result.observed
         state.last_action = result.action
         self._apply_device_info(state, result.device)
-        if result.ok:
+        if result.ok and state.observed == ObservedState.PLAYING:
             state.failure_count = 0
             state.last_success_at = now
+        elif result.ok:
+            state.failure_count = 0
+            state.last_action = f"{result.action}_not_playing"
         else:
             state.failure_count += 1
 
@@ -180,6 +183,9 @@ class Reconciler:
         if state.failure_count > 0:
             if elapsed_s < self._failure_backoff_s(state.failure_count):
                 return "recast_backoff"
+
+        if state.observed in {ObservedState.IDLE, ObservedState.UNKNOWN}:
+            return None
 
         if elapsed_s < self.settings.min_recast_interval_s:
             return "recast_rate_limited"

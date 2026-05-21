@@ -262,7 +262,12 @@ CONTROL_PAGE_HTML = """<!doctype html>
     }
 
     function inferNoiseType(state) {
-      if (!state || state.desired !== "on" || !state.stream_url) {
+      if (
+        !state ||
+        state.desired !== "on" ||
+        state.observed !== "playing" ||
+        !state.stream_url
+      ) {
         return null;
       }
 
@@ -315,6 +320,7 @@ CONTROL_PAGE_HTML = """<!doctype html>
         } else {
           await postJson("/start", { noise_type: noise, volume: selectedVolume() });
           setActive(noise);
+          window.setTimeout(refreshStatus, 7000);
         }
       } catch (error) {
         console.error(error);
@@ -339,6 +345,7 @@ CONTROL_PAGE_HTML = """<!doctype html>
 
     updateVolumeLabel();
     refreshStatus();
+    window.setInterval(refreshStatus, 10000);
   </script>
 </body>
 </html>

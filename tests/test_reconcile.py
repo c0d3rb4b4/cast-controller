@@ -106,7 +106,7 @@ async def test_reconcile_on_rate_limits_recent_cast(tmp_path) -> None:
     store.save(
         ControllerState(
             desired=DesiredState.ON,
-            observed=ObservedState.IDLE,
+            observed=ObservedState.PAUSED,
             device="Bedroom Nest Mini",
             stream_url="http://example.test/noise.m3u8",
             last_cast_attempt_at=now,
@@ -121,6 +121,44 @@ async def test_reconcile_on_rate_limits_recent_cast(tmp_path) -> None:
 
     assert fake.cast_calls == 0
     assert state.last_action == "recast_rate_limited"
+
+
+@pytest.mark.anyio
+async def test_reconcile_on_does_not_rate_limit_idle_cast_result(tmp_path) -> None:
+    settings = Settings(
+        _env_file=None,
+        state_path=tmp_path / "state.json",
+        default_device_host="192.168.68.13",
+        min_recast_interval_s=60,
+    )
+    store = StateStore(settings.state_path)
+    fake = FakeCastClient(
+        CastResult(ok=True, action="cast_sent", observed=ObservedState.IDLE)
+    )
+    now = utc_now()
+    store.save(
+        ControllerState(
+            desired=DesiredState.ON,
+            observed=ObservedState.UNKNOWN,
+            device="Bedroom Nest Mini",
+            stream_url="http://example.test/noise.m3u8",
+        )
+    )
+    reconciler = Reconciler(
+        settings=settings,
+        state_store=store,
+        cast_client=fake,
+    )
+
+    first = await reconciler.reconcile_once(now=now)
+    second = await reconciler.reconcile_once(now=now)
+
+    assert fake.cast_calls == 2
+    assert first.observed == ObservedState.IDLE
+    assert first.last_action == "cast_sent_not_playing"
+    assert first.failure_count == 0
+    assert first.last_success_at is None
+    assert second.last_action == "cast_sent_not_playing"
 
 
 @pytest.mark.anyio

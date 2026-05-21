@@ -72,6 +72,8 @@ def test_control_page_is_served(tmp_path) -> None:
     assert 'min="0" max="100" step="1" value="10"' in response.text
     assert "10%" in response.text
     assert "volume: selectedVolume()" in response.text
+    assert 'state.observed !== "playing"' in response.text
+    assert "window.setInterval(refreshStatus, 10000)" in response.text
     assert 'postJson("/stop", {})' in response.text
 
 
