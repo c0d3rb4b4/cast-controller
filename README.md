@@ -42,7 +42,7 @@ A background reconcile loop ensures observed state moves toward desired state.
 
 ### `GET /control`
 Serve a mobile-friendly control page with buttons for white, pink, and brown noise.
-The page calls `/start` with the selected `noise_type`, and calls `/stop` when the active button is tapped again.
+The page calls `/start` with the selected `noise_type` and volume slider value, and calls `/stop` when the active button is tapped again.
 
 ---
 

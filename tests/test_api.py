@@ -68,7 +68,10 @@ def test_control_page_is_served(tmp_path) -> None:
     assert "WHITE" in response.text
     assert "PINK" in response.text
     assert "BROWN" in response.text
-    assert 'postJson("/start", { noise_type: noise })' in response.text
+    assert 'id="volumeSlider"' in response.text
+    assert 'min="0" max="100" step="1" value="10"' in response.text
+    assert "10%" in response.text
+    assert "volume: selectedVolume()" in response.text
     assert 'postJson("/stop", {})' in response.text
 
 

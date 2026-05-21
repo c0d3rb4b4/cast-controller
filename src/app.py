@@ -68,11 +68,47 @@ CONTROL_PAGE_HTML = """<!doctype html>
       overflow: hidden;
     }
 
-    .theme-toggle {
+    .top-controls {
       position: fixed;
       top: max(16px, env(safe-area-inset-top));
-      right: max(16px, env(safe-area-inset-right));
+      right: max(14px, env(safe-area-inset-right));
+      left: max(14px, env(safe-area-inset-left));
       z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .volume-control {
+      display: flex;
+      align-items: center;
+      flex: 1 1 auto;
+      gap: 10px;
+      min-width: 0;
+      max-width: 560px;
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .volume-slider {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 30px;
+      accent-color: var(--active);
+      cursor: pointer;
+    }
+
+    .volume-value {
+      width: 4ch;
+      text-align: right;
+      color: var(--muted);
+    }
+
+    .theme-toggle {
+      flex: 0 0 auto;
       width: 54px;
       height: 30px;
       border: 1px solid var(--border);
@@ -103,7 +139,7 @@ CONTROL_PAGE_HTML = """<!doctype html>
       flex-direction: column;
       gap: 14px;
       min-height: 100dvh;
-      padding: max(64px, calc(env(safe-area-inset-top) + 58px))
+      padding: max(74px, calc(env(safe-area-inset-top) + 68px))
         max(14px, env(safe-area-inset-right))
         max(14px, env(safe-area-inset-bottom))
         max(14px, env(safe-area-inset-left));
@@ -172,9 +208,15 @@ CONTROL_PAGE_HTML = """<!doctype html>
   </style>
 </head>
 <body>
-  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light and dark mode">
-    <span></span>
-  </button>
+  <div class="top-controls">
+    <label class="volume-control" for="volumeSlider">
+      <input class="volume-slider" id="volumeSlider" type="range" min="0" max="100" step="1" value="10">
+      <output class="volume-value" id="volumeValue" for="volumeSlider">10%</output>
+    </label>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light and dark mode">
+      <span></span>
+    </button>
+  </div>
   <main class="controls" aria-label="Cast stream controls">
     <button class="noise-button" type="button" data-noise="white">WHITE</button>
     <button class="noise-button" type="button" data-noise="pink">PINK</button>
@@ -183,6 +225,8 @@ CONTROL_PAGE_HTML = """<!doctype html>
   <script>
     const root = document.documentElement;
     const themeToggle = document.getElementById("themeToggle");
+    const volumeSlider = document.getElementById("volumeSlider");
+    const volumeValue = document.getElementById("volumeValue");
     const buttons = [...document.querySelectorAll(".noise-button")];
     let activeNoise = null;
     let pending = false;
@@ -207,6 +251,14 @@ CONTROL_PAGE_HTML = """<!doctype html>
       buttons.forEach((button) => {
         button.disabled = value;
       });
+    }
+
+    function updateVolumeLabel() {
+      volumeValue.textContent = `${volumeSlider.value}%`;
+    }
+
+    function selectedVolume() {
+      return Number((Number(volumeSlider.value) / 100).toFixed(2));
     }
 
     function inferNoiseType(state) {
@@ -261,7 +313,7 @@ CONTROL_PAGE_HTML = """<!doctype html>
           await postJson("/stop", {});
           setActive(null);
         } else {
-          await postJson("/start", { noise_type: noise });
+          await postJson("/start", { noise_type: noise, volume: selectedVolume() });
           setActive(noise);
         }
       } catch (error) {
@@ -278,11 +330,14 @@ CONTROL_PAGE_HTML = """<!doctype html>
       localStorage.setItem("cast-control-theme", nextTheme);
     });
 
+    volumeSlider.addEventListener("input", updateVolumeLabel);
+
     buttons.forEach((button) => {
       button.setAttribute("aria-pressed", "false");
       button.addEventListener("click", () => handleNoiseTap(button));
     });
 
+    updateVolumeLabel();
     refreshStatus();
   </script>
 </body>
