@@ -5,6 +5,9 @@
 
 It is designed to be triggered by Home Assistant, Zigbee buttons, or simple REST calls, and to auto-heal if playback stops unexpectedly.
 
+Deployment and operations are documented in the shared MediaWall guide:
+[cast-controller Deployment Guide](../mediawall-documents/installation/cast-controller-deployment.md).
+
 ---
 
 ## Design goals
@@ -44,7 +47,7 @@ Start or ensure playback on a Cast device.
 ```json
 {
   "device": "Bedroom Nest Mini",
-  "stream_url": "http://noise-stream:8000/noise.mp3",
+  "stream_url": "http://192.168.68.84:8081/hls/noise_white/stream.m3u8",
   "volume": 0.25
 }
 ```
@@ -102,7 +105,7 @@ Return internal controller state.
   "desired": "on",
   "observed": "playing",
   "device": "Bedroom Nest Mini",
-  "stream_url": "http://noise-stream:8000/noise.mp3",
+  "stream_url": "http://192.168.68.84:8081/hls/noise_white/stream.m3u8",
   "volume": 0.25,
   "last_action": "reconcile_cast"
 }
@@ -167,12 +170,15 @@ Environment variables:
 | Variable | Description | Default |
 |--------|-------------|---------|
 | `DEFAULT_DEVICE_NAME` | Cast device name | none |
+| `DEFAULT_DEVICE_HOST` | Optional fixed Cast device IP/host | `192.168.68.13` |
 | `DEFAULT_STREAM_URL` | Stream URL | none |
+| `NOISE_STREAM_BASE_URL` | Base URL used to build default noise stream URLs | `http://192.168.68.84:8081` |
+| `DEFAULT_NOISE_TYPE` | Noise stream type when constructing default stream URL | `white` |
 | `DEFAULT_VOLUME` | Playback volume | `0.25` |
 | `RECONCILE_INTERVAL_S` | Reconcile interval | `30` |
 | `MIN_RECAST_INTERVAL_S` | Re-cast rate limit | `60` |
 | `CAST_START_GRACE_S` | Grace before recheck | `5` |
-| `PORT` | HTTP port | `8090` |
+| `PORT` | HTTP port | `8091` |
 | `STATE_PATH` | Persistent state file | `/data/state.json` |
 | `LOG_LEVEL` | Logging level | `info` |
 
@@ -210,11 +216,11 @@ Home Assistant should call this service, not control the Cast device directly.
 Example HA `rest_command`:
 ```yaml
 rest_command:
-  sleep_noise_start:
-    url: "http://cast-controller:8090/start"
+  sleep_noise_start_white:
+    url: "http://192.168.68.84:8091/start"
     method: POST
     content_type: "application/json"
-    payload: '{"device":"Bedroom Nest Mini","volume":0.25}'
+    payload: '{"device":"Bedroom Nest Mini","stream_url":"http://192.168.68.84:8081/hls/noise_white/stream.m3u8","volume":0.25}'
 ```
 
 Zigbee button mapping:

@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    container_name: cast-controller
+    network_mode: host
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/data
+    environment:
+      - PORT=8091
+      - STATE_PATH=/data/state.json
+    labels:
+      - "logging=promtail"
+      - "service=cast-controller"
+      - "environment=production"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+

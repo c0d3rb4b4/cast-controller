@@ -1,0 +1,110 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sync files to service server
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.pytest_cache' \
+            --exclude 'config/app.env' \
+            --exclude 'data' \
+            ./ ${{ secrets.DEPLOY_USER }}@192.168.68.84:~/cast-controller/
+
+      - name: Ensure config and data paths exist
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@192.168.68.84 << 'EOF'
+          cd ~/cast-controller
+          mkdir -p config data
+
+          if [ ! -f config/app.env ]; then
+            echo "Creating config/app.env from example..."
+            if [ -f config/app.env.example ]; then
+              cp config/app.env.example config/app.env
+            else
+              cat > config/app.env << 'ENVEOF'
+          DEFAULT_DEVICE_NAME=
+          DEFAULT_DEVICE_HOST=192.168.68.13
+          NOISE_STREAM_BASE_URL=http://192.168.68.84:8081
+          DEFAULT_NOISE_TYPE=white
+          DEFAULT_STREAM_URL=http://192.168.68.84:8081/hls/noise_white/stream.m3u8
+          DEFAULT_VOLUME=0.25
+          RECONCILE_INTERVAL_S=30
+          MIN_RECAST_INTERVAL_S=60
+          CAST_START_GRACE_S=5
+          PORT=8091
+          STATE_PATH=/data/state.json
+          LOG_LEVEL=info
+          ENVEOF
+            fi
+          else
+            echo "config/app.env already exists"
+          fi
+          EOF
+
+      - name: Deploy via SSH
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@192.168.68.84 << 'EOF'
+          cd ~/cast-controller
+
+          echo "=== Docker Compose Config ==="
+          docker compose config --quiet
+
+          echo "=== Stopping existing container ==="
+          docker compose down || true
+
+          echo "=== Building image ==="
+          docker compose build
+
+          echo "=== Starting container ==="
+          docker compose up -d
+
+          echo "=== Container status ==="
+          docker compose ps -a
+          EOF
+
+      - name: Wait for service to be healthy
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@192.168.68.84 << 'EOF'
+          echo "Waiting for cast-controller service to be ready..."
+
+          if ! docker ps --format '{{.Names}}' | grep -q '^cast-controller$'; then
+            echo "ERROR: Container cast-controller is not running"
+            docker compose -f ~/cast-controller/docker-compose.yml logs --tail 100
+            exit 1
+          fi
+
+          for i in {1..30}; do
+            if docker exec cast-controller curl -fsS http://localhost:8091/health > /dev/null 2>&1; then
+              echo "Service is ready"
+              exit 0
+            fi
+            echo "Attempt $i/30: Service not ready yet, waiting..."
+            sleep 2
+          done
+
+          echo "Service failed to become healthy"
+          docker ps -a --filter name=cast-controller
+          docker compose -f ~/cast-controller/docker-compose.yml logs --tail 100
+          exit 1
+          EOF
+
+      - name: External health check
+        run: |
+          curl -sf http://192.168.68.84:8091/health
+
