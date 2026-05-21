@@ -297,7 +297,7 @@ class CastClient:
     def _content_type_for(self, stream_url: str) -> str:
         path = urlparse(stream_url).path.lower()
         if path.endswith(".m3u8"):
-            return "application/vnd.apple.mpegurl"
+            return "application/x-mpegurl"
         if path.endswith(".mp3"):
             return "audio/mpeg"
         return "audio/mpeg"
