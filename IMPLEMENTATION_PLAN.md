@@ -30,6 +30,10 @@ Verification notes:
       starts a healthy local container reachable at `http://localhost:8091`.
 - [x] Local `GET /health` and `GET /status` return HTTP 200 through Docker
       Desktop using `docker-compose.local.yml`.
+- [x] Explicit `/stop` now sends a Cast stop immediately instead of only
+      waiting for the reconcile loop.
+- [x] Explicit `/start` clears stale failure backoff and observed state so a
+      manual stop from Google Home does not delay the next start request.
 - [ ] Real Cast device `/start` and `/stop` verification on the LAN is still
       pending.
 - [ ] Home Assistant `rest_command` calls are documented but have not been

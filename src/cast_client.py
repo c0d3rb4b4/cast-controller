@@ -136,7 +136,17 @@ class CastClient:
 
         try:
             cast.wait(timeout=self.settings.cast_start_grace_s)
-            cast.media_controller.stop()
+            media_controller = cast.media_controller
+            try:
+                media_controller.update_status()
+                media_controller.block_until_active(
+                    timeout=self.settings.cast_start_grace_s
+                )
+            except Exception:
+                logger.debug("cast_stop_status_update_failed", exc_info=True)
+
+            media_controller.stop()
+            cast.quit_app()
             observed = ObservedState.IDLE
             device_info = self._device_info_from_cast(cast)
             self._cache_device(device_info)

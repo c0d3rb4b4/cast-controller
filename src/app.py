@@ -15,6 +15,8 @@ from models import (
     HealthResponse,
     StartRequest,
     StopRequest,
+    ObservedState,
+    utc_now,
 )
 from reconcile import Reconciler
 from state_store import StateStore
@@ -55,6 +57,16 @@ def create_app(
     app.state.state_store = state_store
     app.state.cast_client = cast_client
     app.state.reconciler = reconciler
+
+    def apply_device_info(state: ControllerState, device_info) -> None:
+        if device_info is None:
+            return
+
+        state.device = device_info.name or state.device
+        state.device_host = device_info.host or state.device_host
+        state.device_port = device_info.port or state.device_port
+        state.device_uuid = device_info.uuid or state.device_uuid
+        state.device_model_name = device_info.model_name or state.device_model_name
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -100,14 +112,14 @@ def create_app(
                 detail="device is required when DEFAULT_DEVICE_NAME and DEFAULT_DEVICE_HOST are unset",
             )
 
-        target_changed = stream_url != state.stream_url or device != state.device
         state.desired = DesiredState.ON
+        state.observed = ObservedState.UNKNOWN
         state.device = device
         state.device_host = state.device_host or settings.default_device_host
         state.stream_url = stream_url
         state.volume = volume
-        if target_changed:
-            state.last_cast_attempt_at = None
+        state.failure_count = 0
+        state.last_cast_attempt_at = None
         state.last_action = "cast_requested"
         state_store.save(state)
         reconciler.request_now()
@@ -124,9 +136,26 @@ def create_app(
         state.desired = DesiredState.OFF
         state.device = request.device or settings.default_device_name or state.device
         state.device_host = state.device_host or settings.default_device_host
+        state.failure_count = 0
+        state.last_cast_attempt_at = None
         state.last_action = "stop_requested"
         state_store.save(state)
+
+        result = await cast_client.stop(
+            device=state.device,
+            device_host=state.device_host or settings.default_device_host,
+        )
+        apply_device_info(state, result.device)
+        if result.ok:
+            state.observed = result.observed
+            state.last_action = result.action
+            state.failure_count = 0
+            state.last_success_at = utc_now()
+        else:
+            state.observed = ObservedState.UNKNOWN
+            state.failure_count += 1
         reconciler.request_now()
+        state_store.save(state)
 
         return ActionResponse(ok=True, desired=state.desired, action="stop_requested")
 
