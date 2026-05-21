@@ -89,6 +89,7 @@ class CastClient:
                 title="Mediawall Noise Stream",
                 autoplay=True,
                 stream_type="LIVE",
+                media_info=self._media_info_for(stream_url),
             )
             cast.media_controller.block_until_active(
                 timeout=self.settings.cast_start_grace_s
@@ -301,6 +302,12 @@ class CastClient:
         if path.endswith(".mp3"):
             return "audio/mpeg"
         return "audio/mpeg"
+
+    def _media_info_for(self, stream_url: str) -> dict[str, str]:
+        path = urlparse(stream_url).path.lower()
+        if path.endswith(".m3u8"):
+            return {"hlsSegmentFormat": "ts_aac"}
+        return {}
 
     def _normalize_player_state(self, player_state: str | None) -> ObservedState:
         match player_state:
